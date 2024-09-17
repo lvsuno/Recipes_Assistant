@@ -7,8 +7,8 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 load_dotenv()
-
-tz = ZoneInfo("Canada/Eastern")
+TZ_ZONE = os.getenv("TZ_ZONE", "Canada/Eastern")
+tz = ZoneInfo(TZ_ZONE)
 
 
 def get_db_connection():

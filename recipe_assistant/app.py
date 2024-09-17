@@ -4,18 +4,23 @@ import uuid
 import pandas as pd
 from assistant import get_answer
 from db import save_conversation, save_feedback, get_recent_conversations, get_feedback_stats
-
+import os
 
 def print_log(message):
     print(message, flush=True)
 
-print_log("Streamlit app loop completed")
 
 def init_project():
     st.write("Before starting the app please select your Time zone")
-    df = pd.read_csv('../data/time_zone.csv')
+    df = pd.read_csv('data/time_zone.csv')
 
     tz_zone = pd.Series(df['timezone']).unique().tolist()
+    tz_zone.insert(0, "") # add 1st blank entry so that 1st option does not get auto selected
+    chosen_tz_zone = st.selectbox("Select Offices to display from", location_list)
+    if chosen_tz_zone != "":
+        txt = f"You chose {chosen_tz_zone}"
+        st.write(f":green[{txt}]")
+    os.environ['TZ_ZONE']=chosen_tz_zone
 
 def main():
 
@@ -27,6 +32,8 @@ def main():
     print_log("Starting the Course Assistant application")
     st.title("Recipe Assistant")
 
+    init_project()
+
     # Session state initialization
     if 'session_id' not in st.session_state:
         st.session_state.session_id = str(uuid.uuid4())
@@ -37,6 +44,8 @@ def main():
     if 'conversation_id' not in st.session_state:
         # Conversation state initialization
         st.session_state.conversation_id = None
+
+print_log("Streamlit app loop completed")
 
 if __name__ == "__main__":
     print_log("Recipe Assistant application started")
