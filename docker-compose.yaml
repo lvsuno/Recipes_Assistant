@@ -50,7 +50,6 @@ services:
       - MODEL_NAME=${MODEL_NAME}
       - INDEX_NAME=${INDEX_NAME}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DATA_PATH="../data/data.csv"
     ports:
       - "${STREAMLIT_PORT:-8501}:8501"
     volumes:

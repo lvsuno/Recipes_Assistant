@@ -4,6 +4,30 @@ import smtplib
 import time
 import traceback
 from email.mime.text import MIMEText
+import streamlit as st
+from typing import Iterable
+from pathlib import Path
+
+
+ROOT_PATH: Path = Path(".").resolve()
+WRK_PATH: Path = ROOT_PATH/"recipe_assistant"
+
+# data
+DATA_FILE: Path = ROOT_PATH/"data/data.csv"
+DATA_IMAGES_PATH: Path = ROOT_PATH/"data/Food_Images/"
+GROUND_TRUTH_FILE: Path = ROOT_PATH/"data/ground-truth-data.csv"
+
+
+# ========= Chat Bot =============
+# Assets
+BOT_AVATAR_FILE: Path = WRK_PATH/"assets/logo.png"
+BOT_DISCLAIMER_FILE: Path = WRK_PATH/"assets/disclaimer.md"
+
+
+def stream_text(response: str, sleep: float = 0.05) -> Iterable[str]:
+    for word in response.split(" "):
+        yield word + " "
+        time.sleep(sleep)
 
 
 # retry to connect to a source
@@ -55,13 +79,12 @@ def log_execution(func):
     return wrapper
 
 
-'''
-Notification decorator: Send an email whenever the execution of inner function fails
-it can be a Teams/slack notification or anyone. 
-'''
-
 
 def email_on_failure(sender_email, password, recipient_email):
+    """
+    Notification decorator: Send an email whenever the execution of inner function fails
+    it can be a Teams/slack notification or anyone. 
+   """
     def decorator(func):
         def wrapper(*args, **kwargs):
             try:
@@ -88,3 +111,36 @@ def email_on_failure(sender_email, password, recipient_email):
 
     return decorator
 
+
+
+def session_keys(key: str | list[str], default_value=None):
+    """
+    Update Session Keys. 
+    This can be used to update session keys after each event.
+    """
+    if isinstance(key, list):
+        for k in key:
+            session_keys(k, default_value)
+    elif isinstance(key, str):
+        if key not in st.session_state:
+            st.session_state[key] = default_value
+
+
+def is_valid_email(email):
+
+    """
+    Check if the email is valid
+    """
+    # Comprehensive regex for email validation
+    pattern = r'''
+        ^                         # Start of string
+        (?!.*[._%+-]{2})          # No consecutive special characters
+        [a-zA-Z0-9._%+-]{1,64}    # Local part: allowed characters and length limit
+        (?<![._%+-])              # No special characters at the end of local part
+        @                         # "@" symbol
+        [a-zA-Z0-9.-]+            # Domain part: allowed characters
+        (?<![.-])                 # No special characters at the end of domain
+        \.[a-zA-Z]{2,}$           # Top-level domain with minimum 2 characters
+    ''' 
+    # Match the entire email against the pattern
+    return re.match(pattern, email, re.VERBOSE) is not None

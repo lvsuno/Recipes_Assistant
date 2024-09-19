@@ -4,10 +4,11 @@ from psycopg2.extras import DictCursor
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 
-load_dotenv()
-TZ_ZONE = os.getenv("TZ_ZONE", "Canada/Eastern")
+# load_dotenv()
+TZ_ZONE = os.getenv('TZ_ZONE')
+print(TZ_ZONE, flush=True)
 tz = ZoneInfo(TZ_ZONE)
 
 

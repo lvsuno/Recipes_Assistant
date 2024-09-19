@@ -6,3 +6,9 @@ headless = true
 runOnSave = true
 # you will need this if running docker on windows host:
 # fileWatcherType = "poll"
+
+[theme]
+base="light"
+primaryColor = "#F63366"
+backgroundColor = "black"
+secondaryBackgroundColor="rgba(245, 40, 145, 0.10)"
