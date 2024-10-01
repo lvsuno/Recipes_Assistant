@@ -163,6 +163,8 @@ cython_debug/
 
 
 cron_task.py
-try_ricardo_scrap.ipynb 
+try_ricardo_scrap.ipynb
 aiven_pg_conf_1.png
 .utils.md
+
+*.pkl
