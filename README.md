@@ -1,21 +1,118 @@
-# Recipe Assistant
-This is the final project for llm_zoomcamp
+# Digital Recipe Assistant
+[![PyPI - Python Version](https://img.shields.io/badge/python-3.10.9-blue)](https://www.python.org/downloads/)
+[![streamlit](https://img.shields.io/badge/streamlit-1.39.0-35a7e7)](https://console.groq.com/)
 
-Recipe data that can be downloaded on [kaggle](https://www.kaggle.com/datasets/pes12017000148/food-ingredients-and-recipe-dataset-with-images?resource=download).
+[![Groq](https://img.shields.io/badge/hyperopt-0.9.0-35a7e7)](https://console.groq.com/)
+[![Numpy](https://img.shields.io/badge/numpy-1.26.4-013243)](https://numpy.org/)
+[![Pandas](https://img.shields.io/badge/pandas-2.2.2-130654)](https://pandas.pydata.org/)
+[![Psycopg2](https://img.shields.io/badge/psycopg2-2.9.9.4-216464)](https://pypi.org/project/psycopg2/)
+[![Scikit-learn](https://img.shields.io/badge/scikit_learn-1.5.2-3399cd)](https://scikit-learn.org/)
+[![OpenAi](https://img.shields.io/badge/openai-1.35.7-189fdd)](https://platform.openai.com/docs/overview)
+[![Black](https://img.shields.io/badge/black-22.10.0-393a39)](https://black.readthedocs.io/en/stable/)
+[![Isort](https://img.shields.io/badge/isort-5.10.1-ef8336)](https://isort.readthedocs.io/en/latest/)
+[![Pre-commit](https://img.shields.io/badge/pre_commit-2.20.0-f8b425)](https://pre-commit.com/)
+[![Pylint](https://img.shields.io/badge/pylint-2.15.4-2a5adf)](https://pylint.pycqa.org/en/latest/)
 
-https://www.epicurious.com/
+<br><br><br>
+
+This is repository contain the code to build a digital recipe assistant.
+
+![](Doc_images/AI_recipe_assistant_1.webp)
+
+Most of us don't often know what to eat even with many ingredients in our kitchen. This digital assistant provides a tool to find a recipe for you in a conversational way.
+
+## Project overview
+
+Yhis recipe assistant can help you to find the best recipe according to the ingredients. You can directly ask any questions about the cooking process and it will return you the complete recipe. Sometimes based on your entry, you can have several suggestions and an image of the final meal if available.
+
+## Dataset
+The dataset used here contains:
+
+- **List of ingredients** a list of ingredients used to cook a specific meal
+- **Title** the recipe name
+- **Instructions** the isntruction to cook the meal
+- **Image name** the name of the image file.
+
+Recipe data that can be downloaded on [kaggle](https://www.kaggle.com/datasets/pes12017000148/food-ingredients-and-recipe-dataset-with-images?resource=download). The dataset contains
+than 13 501 recipes from [epicurious.com](https://www.epicurious.com/).
+
+
 ## Additional notes for those trying the streamlit/grafana out
 
-1) The following packages are required when you run some of .py scripts
+## Technologies
+| Name | Scope |
+| --- | --- |
+| Jupyter Notebook | Exploratory data analysis|
+| Docker | Application containerization|
+| Docker-Compose | Multi-container Docker applications definition and running|
+| OpenAi, Groq, Ollama| LLM|
+| Streamlit| User interface |
+| PostgreSQL| storage|
+| Grafana | Dashboard and monitoring |
+| pytest | Python unit testing suite |
+| pylint | Python static code analysis |
+| black | Python code formatting |
+| isort | Python import sorting |
+| Pre-Commit Hooks | Code issue identification before submission |
 
-```
-pip install psycopg2-binary python-dotenv
-pip install pgcli
-```
+We use a customized version of - [Minsearch](https://github.com/alexeygrigorev/minsearch) for full-text search. Our implementation can be find in [Minsearch](notebooks/minsearch.py) and [Minsearch](recipe_assistant/minsearch.py). In our implementation we add semantic search and hybrid search. The user can choose in `.env` file the model to compute embeddings, choose to rerank the search with a specific model.
+
+In our implementation, we don't use elasticsearch cause it doesn't give good performance in the evaluation step. Also, we don't use reranking cause the performance decrease with that. But the user can choose its own reranking model and try.
+
+The user has choice between the following models:
 
 
-2) To download the phi3 model to the container
-```
-docker-compose up -d
-docker-compose exec ollama ollama pull phi3
-```
+- `Groq/gemma2-9b-it`
+- `Groq/llama-3.1-70b-versatile`
+- `Groq/mixtral-8x7b-32768`
+- `ollama/phi3`
+- `openai/gpt-3.5-turbo`
+- `openai/gpt-4o`
+- `openai/gpt-4o-mini`
+## Project setup
+
+1. You need a key from OpenAi or Groq depending on the model you choose. If your key is not valid, the chat will not start. You have to place the key in the `.env` file. This file, i defined it as `dev.env` you have to change the name and write your own credentials.
+
+2. You can start the project by running `make init-docker` in the terminal or by typing `docker-compose up`.
+
+3. Once docker finish to launch everything, prepare the database and index the documents by running `make init-index-db`.
+
+
+2. If you want to use phi3 you have to pull the model first by running `make pull-phi3`.
+
+The pipenv environment is just use for development to make some code quality checks and github pre-commit.
+
+## Running the application
+
+You just need to go to [http://localhost:8501/](http://localhost:8501/) since docker compose have make everything up.
+
+You need to choose a pseudo first. Each user can have several sessions (each run of streamlit), each session can have several chats and each chat several conversation.
+![](Doc_images/app.gif)
+
+
+## Experiments
+
+For experiments, we use Jupyter notebooks.
+They are in the [`notebooks`](notebooks/) folder.
+
+We have the following notebooks:
+
+- [`clean_data.ipynb`](notebooks/clean_data.ipynb): To clean the data and save it to [`clean_data.csv`](data/clean_data.csv)
+- [`rag-test.ipynb`](notebooks/rag-test.ipynb): The RAG flow and evaluating the system.
+- [`evaluation-data-generation.ipynb`](notebooks/evaluation-data-generation.ipynb): Generating the ground truth dataset for retrieval evaluation.
+
+
+## Monitoring
+
+We use Grafana for monitoring the application.
+
+It's accessible at [localhost:3000](http://localhost:3000):
+
+- Login: "admin"
+- Password: "admin"
+
+### Dashboards
+
+<p align="center">
+  <img src="Doc_images/Dashboard.png">
+</p>

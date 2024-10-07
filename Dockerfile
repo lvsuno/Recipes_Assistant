@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM  --platform=${BUILDPLATFORM} python:3.10-slim
 
 ENV PYTHONUNBUFFERED=1
 
@@ -17,9 +17,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 #COPY recipe_assistant .
 # COPY utils/ utils/
-COPY data/data.csv data/data.csv
-COPY data/time_zone.csv data/time_zone.csv
-COPY data/Food_Images/ data/Food_Images/
+# COPY data/data.csv data/data.csv
+# COPY data/time_zone.csv data/time_zone.csv
+# COPY data/Food_Images/ data/Food_Images/
+
+COPY data/ data/
 
 HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
 

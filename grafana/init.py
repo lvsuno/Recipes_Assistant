@@ -1,11 +1,10 @@
 import os
 import json
-import requests
 
+import requests
 from dotenv import load_dotenv
 
-
-load_dotenv()
+load_dotenv('../.env')
 
 
 GRAFANA_URL = "http://localhost:3000"

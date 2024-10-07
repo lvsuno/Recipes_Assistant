@@ -41,22 +41,26 @@ services:
     env_file:
       - .env
     environment:
-      - ELASTIC_URL=http://elasticsearch:${ELASTIC_PORT:-9200}
+#      - ELASTIC_URL=http://elasticsearch:${ELASTIC_PORT:-9200}
       - OLLAMA_URL=http://ollama:${OLLAMA_PORT:-11434}/v1/
       - POSTGRES_HOST=postgres
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - MODEL_NAME=${MODEL_NAME}
-      - INDEX_NAME=${INDEX_NAME}
+      - RRK_MODEL=${RRK_MODEL}
+      - EVALUATION_MODEL=${EVALUATION_MODEL}
+      - INDEX_FILENAME=${INDEX_FILENAME}
+#      - INDEX_NAME=${INDEX_NAME}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
     ports:
       - "${STREAMLIT_PORT:-8501}:8501"
     volumes:
       - ./recipe_assistant/:/app/recipe_assistant
 
     depends_on:
-      - elasticsearch
+#      - elasticsearch
       - ollama
       - postgres
 
@@ -82,7 +86,7 @@ services:
       - postgres
 
 volumes:
-  elasticsearch_data:
+#  elasticsearch_data:
   ollama_data:
   postgres_data:
   grafana_data:

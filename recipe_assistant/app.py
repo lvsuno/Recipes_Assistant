@@ -1,36 +1,56 @@
-from prompt_builder import WELCOME_MSG
-import streamlit as st
-import time
+"""
+Main file for the streamlit app
+"""
+
 import uuid
+from typing import Any
+
 import pandas as pd
-from assistant import get_answer
-from db import TZ_ZONE, save_conversation, save_feedback, get_recent_conversations, get_feedback_stats
-import os
-from app_utils.ui import (create_button, 
-    create_chat_msg,
-    create_welcome_msg,
-    disclaimer_dialog,
-    menu_ui
+import streamlit as st
+from db import (
+    check_user,
+    get_a_chat,
+    create_chat,
+    create_user,
+    save_feedback,
+    create_session,
+    get_recent_chats,
+    save_conversation,
+    get_feedback_stats
 )
+from assistant import get_answer
+from app_utils.ui import (
+    menu_ui,
+    stream_text,
+    create_chat_msg,
+    disclaimer_dialog,
+    create_welcome_msg,
+    show_current_chat_history
+)
+from prompt_builder import WELCOME_MSG
+from app_utils.utils import BOT_AVATAR_FILE, USER_AVATAR_FILE, session_keys
 
-
-APP_NAME='NOUDOUDOU'
+APP_NAME = 'NOUDOUDOU'
 
 APP_DESC_TEXT: str = """
 "NOUDOUDOU" is your personal recipe helper.\n
-This is an AI-powered digital assistant based on more\n 
-than 15 000 recipes from [epicurious.com](https://www.epicurious.com/).\n
+This is an AI-powered digital assistant based on more\n
+than 13 000 recipes from [epicurious.com](https://www.epicurious.com/).\n
 You can get some advices based on your ingredients or\n
 ask about a specific recipe.
 """
-
+AVATARS: dict[str, Any] = {
+    "assistant": str(BOT_AVATAR_FILE),
+    "user": str(USER_AVATAR_FILE),
+}
 st.set_page_config(page_title=APP_NAME, page_icon="👩‍🍳", layout="wide")
 
+
 def print_log(message):
+    """
+    Print message in the console
+    """
     print(message, flush=True)
-
-
-
 
 
 def init_project():
@@ -38,109 +58,176 @@ def init_project():
     Iniatilize the project by choosing a time zone
     """
     # st.write("Before starting the app please login first")
-    
-    
 
+    if 'first_run' not in st.session_state:
+        session_keys('first_run', True)
+        # st.session_state.first_run = True
+
+        disclaimer_dialog()
+    else:
+        session_keys('first_run', False)
+        # st.session_state.first_run = False
+
+    # Session state initialization
+    if 'session_id' not in st.session_state:
+        st.session_state.session_id = str(uuid.uuid4())
+        print_log(f"New session started with ID: {st.session_state.session_id}")
+
+    if 'user_login_state' not in st.session_state:
+        st.session_state["user_login_state"] = False
+    # if 'user_name' not in st.session_state:
+    #     st.session_state["user_login_state"] = False
+    else:
+        st.session_state["user_login_state"] = True
+
+    if 'user_name' not in st.session_state:
+        st.session_state["user_name"] = None
+
+    if 'key_val' not in st.session_state:
+        st.session_state["key_val"] = None
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    if 'fbk' not in st.session_state:
+        session_keys('fbk', False)
+
+    if 'new_llm_answer' not in st.session_state:
+        session_keys('new_llm_answer', False)
     # df = pd.read_csv('data/time_zone.csv')
 
     # tz_zone = pd.Series(df['timezone']).unique().tolist()
     # # tz_zone.insert(0, "") # add 1st blank entry so that 1st option does not get auto selected
-    # chosen_tz_zone = st.selectbox("Select your time zone", tz_zone, 
+    # chosen_tz_zone = st.selectbox("Select your time zone", tz_zone,
     #                               index=tz_zone.index("Canada/Eastern"))
     # if chosen_tz_zone != "":
     #     # txt = f"You chose {chosen_tz_zone}"
     #     # st.write(f":green[{txt}]")
     #     os.environ['TZ_ZONE'] = chosen_tz_zone
 
+
 def main():
-
     """
-     A conversation with a session id which here we call it a conversation id. 
-     During this conversation, user can ask several question or the same question but with different
-     parameters. A conversation id is defined by the session id. But each Question/answer is stored with it's own id.
+    A conversation with a session id which here we call it a conversation id.
+    During this conversation, user can ask several question or the same question but with different
+    parameters. A conversation id is defined by the session id.
+    But each Question/answer is stored with it's own id.
     """
 
-    model_choice, register_button, login_button = menu_ui(APP_DESC_TEXT)
+    init_project()
 
-    user_name = 'guest'
-    print_log("Starting the Course Assistant application")
-    st.title("Recipe Assistant")
-    
-    # init_project()
-    if 'first_run' not in st.session_state:
-        st.session_state.first_run = True
-        disclaimer_dialog()   
+    model_choice, user_name = menu_ui(APP_DESC_TEXT)
+    if user_name:
+        st.session_state["user_name"] = user_name
+        if check_user(user_name):
+            create_session(st.session_state.session_id, user_name)
 
-    # Session state initialization
-    if 'session_id' not in st.session_state:
-        st.session_state.session_id = str(uuid.uuid4())
-        print_log(f"New session started with ID: {st.session_state.session_id}")
-    if 'count' not in st.session_state:
-        st.session_state.count = 0
-        print_log("Feedback count initialized to 0")
-    if 'conversation_id' not in st.session_state:
-        # Conversation state initialization
-        st.session_state.conversation_id = None
+        else:
+            create_user(user_name)
+            create_session(st.session_state.session_id, user_name)
 
-    with st.sidebar:
-        # Create New_chat button
-        _, _, new_chat_col2 = st.columns([1, 1, 1])
+    # if model_choice != " ":
+    #     check_validity = check_llm_api_key(model_choice)
+    # st.write(st.session_state["key_val"])
 
-        
-        with new_chat_col2:
-            new_chat_button = create_button(
-                "new_chat",
-                ":pencil:",
-                default=False,
-                help="New Chat",
+    if st.session_state["user_name"] and model_choice != " ":
+
+        print_log("Starting the Course Assistant application")
+        st.title("Recipe Assistant")
+
+        if 'count' not in st.session_state:
+            st.session_state.count = 0
+            print_log("Feedback count initialized to 0")
+        if 'conversation_id' not in st.session_state:
+            # Conversation state initialization
+            st.session_state.conversation_id = None
+
+        with st.sidebar:
+            # Create New_chat button
+            _, _, new_chat_col2 = st.columns([1, 1, 1])
+
+            with new_chat_col2:
+                # session_keys('new_chat', False)
+                new_chat_button = st.button(
+                    key="new_chat",
+                    label=":pencil: new chat",
+                    help="New Chat",
+                    # on_click=,
+                )
+                if new_chat_button:
+                    st.session_state["messages"].clear()
+                    st.session_state.chat_id = 'ch_' + str(uuid.uuid4())
+                    create_chat(st.session_state.chat_id, st.session_state.session_id)
+                    st.session_state.new_llm_answer = False
+                    st.session_state.fbk = False
+
+            show_history_on = st.toggle("Show History")
+            # if show_history_on:
+            #     st.session_state.new_llm_answer = False
+            #     st.session_state.fbk = False
+
+    if st.session_state["key_val"] and model_choice != " ":
+        # ========= Chat box =======
+        new_chat: bool = not st.session_state.messages
+
+        if new_chat:
+            st.session_state.messages = []
+            if 'chat_id' not in st.session_state:
+                st.session_state.chat_id = 'ch_' + str(uuid.uuid4())
+                # Create a chat in the database
+                create_chat(st.session_state.chat_id, st.session_state.session_id)
+            # Create first message
+            create_welcome_msg(
+                msg=WELCOME_MSG.format(
+                    user_name=st.session_state["user_name"], app_name=APP_NAME
+                )
             )
-        
-        show_history_on = st.toggle("Show History")
+        else:
+            # show chat message history
+            show_current_chat_history(avatars=AVATARS)
 
+        # for message in st.session_state.messages:
+        #     with st.chat_message(message["role"]):
+        #         st.markdown(message["content"])
 
-# ========= Chat box =======
-    new_chat: bool = not st.session_state.messages 
+        if prompt := st.chat_input("How to cook rice?"):
+            st.session_state.new_llm_answer = False
+            st.session_state.fbk = False
+            create_chat_msg(
+                content=stream_text(prompt, sleep=0.001),
+                role="user",
+                avatar=AVATARS["user"],
+            )
+            if 'conv_id' not in st.session_state:
+                st.session_state.conv_id = 'cv_' + str(uuid.uuid4())
+            else:
+                st.session_state.update({"conv_id": 'cv_' + str(uuid.uuid4())})
+            with st.chat_message("assistant", avatar=AVATARS["assistant"]):
+                with st.spinner("One moment..."):
+                    raw_answer = get_answer(
+                        prompt, model_choice, st.session_state.messages
+                    )
+                    st.write_stream(stream_text(raw_answer["answer"], sleep=0.01))
+            save_conversation(
+                st.session_state.conv_id, st.session_state.chat_id, prompt, raw_answer
+            )
+            st.session_state.new_llm_answer = True
+            st.session_state.messages.append(
+                {"role": "assistant", "content": raw_answer["answer"]}
+            )
 
-    if new_chat:
-        st.session_state.messages = []
-        # Create first message
-        create_welcome_msg(
-            msg=WELCOME_MSG.format(user_name=user_name, app_name=APP_NAME)
+    if st.session_state.new_llm_answer:
+        st.markdown("### Rate this answer:")
+        fbk_sel = st.feedback(
+            "stars",
+            key='fbk',
+            on_change=session_keys("fbk", True),
+            disabled=st.session_state["fbk"],
         )
+        if isinstance(fbk_sel, int) and fbk_sel:
+            save_feedback(st.session_state.conv_id, fbk_sel)
+    print_log("Streamlit app loop completed")
 
-
-
-
-
-
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-if prompt := st.chat_input("How to cook rice?"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    with st.chat_message("assistant"):
-        stream = client.chat.completions.create(
-            model=st.session_state["openai_model"],
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
-        response = st.write_stream(stream)
-    st.session_state.messages.append({"role": "assistant", "content": response})
-
-
-
-print_log("Streamlit app loop completed")
 
 if __name__ == "__main__":
     print_log("Recipe Assistant application started")

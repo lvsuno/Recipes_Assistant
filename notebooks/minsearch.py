@@ -1,11 +1,13 @@
-import pandas as pd
-
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from typing import Dict
 from concurrent.futures import ThreadPoolExecutor
-from tqdm.auto import tqdm
 
 import numpy as np
+import pandas as pd
+from tqdm.auto import tqdm
+from sentence_transformers import CrossEncoder
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
+
 
 def index_vec_doc(doc, model, fields):
 
@@ -16,29 +18,34 @@ def index_vec_doc(doc, model, fields):
     return model.encode(combined).tolist()
 
 
-def par_indexing (documents,fields, model) :
+def par_indexing(documents, fields, model):
+    """
+    Parallel indexing
+    """
     executor = ThreadPoolExecutor(8)
     results = []
 
     with tqdm(total=len(documents)) as progress:
-            futures = []
-            for doc in documents:
-                future = executor.submit(index_vec_doc, doc, model, fields)
-                # attaches a callback to the future that will update
-                # the progress bar each time a task is completed
-                future.add_done_callback(lambda p: progress.update())
-                futures.append(future)
-            for future in futures:
-                # The code waits for each future to complete by calling future.result().
-                # This call  will block until the task is finished, and
-                # then it retrieves the result.
-                result = future.result()
-                results.append(result)
+        futures = []
+        for doc in documents:
+            future = executor.submit(index_vec_doc, doc, model, fields)
+            # attaches a callback to the future that will update
+            # the progress bar each time a task is completed
+            future.add_done_callback(lambda p: progress.update())
+            futures.append(future)
+        for future in futures:
+            # The code waits for each future to complete by calling future.result().
+            # This call  will block until the task is finished, and
+            # then it retrieves the result.
+            result = future.result()
+            results.append(result)
     return np.array(results)
+
 
 class Index:
     """
-    A simple search index using TF-IDF and cosine similarity for text fields and exact matching for keyword fields.
+    A simple search index using TF-IDF and cosine similarity for text fields
+    and exact matching for keyword fields.
 
     Attributes:
         text_fields (list): List of text field names to index.
@@ -49,7 +56,9 @@ class Index:
         docs (list): List of documents indexed.
     """
 
-    def __init__(self, text_fields, keyword_fields, type='text', vectorizer_params={}, model=None):
+    def __init__(
+        self, text_fields, keyword_fields, type='text', vectorizer_params={}, model=None
+    ):
         """
         Initializes the Index with specified text and keyword fields.
 
@@ -60,11 +69,15 @@ class Index:
         """
         self.text_fields = text_fields
         self.type = type
+        self.reranking_model = CrossEncoder(
+            "cross-encoder/ms-marco-MiniLM-L-12-v2", max_length=512
+        )
 
         if type == 'text':
             self.keyword_fields = keyword_fields
-            self.vectorizers = {field: TfidfVectorizer(**vectorizer_params)
-                                for field in text_fields}
+            self.vectorizers = {
+                field: TfidfVectorizer(**vectorizer_params) for field in text_fields
+            }
             self.keyword_df = None
             self.text_matrices = {}
             self.docs = []
@@ -76,13 +89,15 @@ class Index:
             self.docs = []
         elif type == 'hybrid':
             self.keyword_fields = keyword_fields
-            self.vectorizers = {field: TfidfVectorizer(**vectorizer_params)
-                                for field in text_fields}
+            self.vectorizers = {
+                field: TfidfVectorizer(**vectorizer_params) for field in text_fields
+            }
             self.keyword_df = None
             self.text_matrices = {}
             self.model = model
             self.vector_matrices = []
             self.docs = []
+
     def fit(self, docs):
         """
         Fits the index with the provided documents.
@@ -99,14 +114,13 @@ class Index:
                 texts = [doc.get(field, '') for doc in docs]
                 self.text_matrices[field] = self.vectorizers[field].fit_transform(texts)
         elif self.type == 'vector':
-            self.vector_base = par_indexing (self.docs,self.text_fields, self.model)
+            self.vector_base = par_indexing(self.docs, self.text_fields, self.model)
         elif self.type == 'hybrid':
 
             for field in self.text_fields:
                 texts = [doc.get(field, '') for doc in docs]
                 self.text_matrices[field] = self.vectorizers[field].fit_transform(texts)
-            self.vector_base = par_indexing (self.docs,self.text_fields, self.model)
-
+            self.vector_base = par_indexing(self.docs, self.text_fields, self.model)
 
         for doc in docs:
             for field in self.keyword_fields:
@@ -116,21 +130,34 @@ class Index:
 
         return self
 
-    def search(self, query, filter_dict={}, boost_dict={}, num_results=10, hybrid_boost={'text':0.5, 'vector':0.5}):
+    def search(
+        self,
+        query,
+        filter_dict: Dict[str, float] = {},
+        boost_dict={},
+        num_results=10,
+        hybrid_boost={'text': 0.5, 'vector': 0.5},
+        reranking=False,
+    ):
         """
         Searches the index with the given query, filters, and boost parameters.
 
         Args:
             query (str): The search query string.
-            filter_dict (dict): Dictionary of keyword fields to filter by. Keys are field names and values are the values to filter by.
-            boost_dict (dict): Dictionary of boost scores for text fields. Keys are field names and values are the boost scores.
+            filter_dict (dict): Dictionary of keyword fields to filter by.
+                                Keys are field names and values are the values to filter by.
+            boost_dict (dict): Dictionary of boost scores for text fields.
+                                Keys are field names and values are the boost scores.
             num_results (int): The number of top results to return. Defaults to 10.
 
         Returns:
             list of dict: List of documents matching the search criteria, ranked by relevance.
         """
         if self.type == 'text':
-            query_vecs = {field: self.vectorizers[field].transform([query]) for field in self.text_fields}
+            query_vecs = {
+                field: self.vectorizers[field].transform([query])
+                for field in self.text_fields
+            }
             scores = np.zeros(len(self.docs))
 
             # Compute cosine similarity for each text field and apply boost
@@ -147,8 +174,10 @@ class Index:
             scores = cosine_similarity(query_vec, self.vector_base).flatten()
 
         if self.type == 'hybrid':
-            query_vecs = {field: self.vectorizers[field].transform([query])
-                          for field in self.text_fields}
+            query_vecs = {
+                field: self.vectorizers[field].transform([query])
+                for field in self.text_fields
+            }
             scores = np.zeros(len(self.docs))
 
             # Compute cosine similarity for each text field and apply boost
@@ -159,9 +188,12 @@ class Index:
 
             query_vec = self.model.encode(query).reshape(1, -1)
 
-            # Compute cosine similarity for each text field and apply boost
-            scores = hybrid_boost.get('text')*scores + hybrid_boost.get('vector') * cosine_similarity(query_vec, self.vector_base).flatten()
+            sim_vec = cosine_similarity(query_vec, self.vector_base).flatten()
 
+            # Compute cosine similarity for each text field and apply boost
+            scores = (
+                hybrid_boost.get('text') * scores + hybrid_boost.get('vector') * sim_vec
+            )
 
         # Apply keyword filters
         for field, value in filter_dict.items():
@@ -175,5 +207,21 @@ class Index:
 
         # Filter out zero-score results
         top_docs = [self.docs[i] for i in top_indices if scores[i] > 0]
+
+        if reranking:
+            doc_texts = [
+                ' '.join([result[field1] + " " for field1 in self.text_fields])
+                for result in top_docs
+            ]
+            scores = self.reranking_model.predict(
+                [(query, doc_text) for doc_text in doc_texts]
+            )
+
+            # Use argpartition to get top num_results indices
+            top_indices = np.argpartition(scores, -num_results)[-num_results:]
+            top_indices = top_indices[np.argsort(-scores[top_indices])]
+
+            # Filter out zero-score results
+            top_docs = [top_docs[i] for i in top_indices if scores[i] > 0]
 
         return top_docs

@@ -1,61 +1,61 @@
 import os
-import time
 import json
+import time
 import pickle
 from typing import Dict
-from openai import OpenAI
-from groq import Groq
+
+import groq
+import openai
+from app_utils.cst import (
+    OLLAMA_URL,
+    GROQ_API_KEY,
+    USE_RERANKING,
+    INDEX_FILENAME,
+    OPENAI_API_KEY,
+    EVALUATION_MODEL
+)
+from prompt_builder import ENTRY_TEMPLATE, PROMPT_INSTRUCTION
+from app_utils.utils import (  # , replace_image_syntax
+    APP_UTILS_PATH,
+    DATA_IMAGES_PATH
+)
 
 # from elasticsearch import Elasticsearch
 # from sentence_transformers import SentenceTransformer
 
-from prompt_builder import ENTRY_TEMPLATE, PROMPT_INSTRUCTION
 
-
-# ELASTIC_URL = os.getenv("ELASTIC_URL", "http://elasticsearch:9200")
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434/v1/")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "your-api-key-here")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "your-api-key-here")
-# INDEX_NAME = os.getenv('INDEX_NAME', 'recipe-questions')
-INDEX_FILENAME = os.getenv('INDEX_FILENAME', 'index')
-MODEL_NAME = os.getenv("MODEL_NAME", 'multi-qa-MiniLM-L6-cos-v1')
-EVALUATION_MODEL = os.getenv("EVALUATION_MODEL", 'openai/gpt-4o-mini')
-
-with open(f'recipe_asistant/app_utils/{INDEX_FILENAME}.pkl', 'wb') as ind:
+with open(f'{APP_UTILS_PATH}/{INDEX_FILENAME}.pkl', 'rb') as ind:
     index = pickle.load(ind)
-
 # es_client = Elasticsearch(ELASTIC_URL)
-ollama_client = OpenAI(base_url=OLLAMA_URL, api_key="ollama")
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
-groq_client = Groq(api_key=GROQ_API_KEY)
-
 # model = SentenceTransformer(MODEL_NAME)
 
-boost = {
-  'Title': 1.301766512843531,
-  'Instructions': 0.7387164179150028,
-  'text': 0.36555723393033346
-#   'Cleaned_Ingredients': 1.3020399036175552,
-#   'Image_Name': 1.7024187651904266
+
+def minsearch_hybrid_rrk_improved(query: str):
+    """
+    Hybrid search function
+    """
+
+    boost = {
+        'Title': 1.301766512843531,
+        'Instructions': 0.7387164179150028,
+        'text': 0.36555723393033346,
+        #   'Cleaned_Ingredients': 1.3020399036175552,
+        #   'Image_Name': 1.7024187651904266
     }
 
-
-def minsearch_hybrid_improved(query):
-
-    """
-    Search function
-    """
     text = boost.pop('text')
 
     results = index.search(
         query=query,
         filter_dict={},
         boost_dict=boost,
-        hybrid_boost={'text':text, 'vector': 1-text},
-        num_results=10
+        hybrid_boost={'text': text, 'vector': 1 - text},
+        reranking=USE_RERANKING,
+        num_results=5,
     )
 
     return results
+
 
 # def elastic_search_text(query,  index_name=INDEX_NAME):
 #     search_query = {
@@ -138,48 +138,56 @@ def minsearch_hybrid_improved(query):
 
 
 def build_prompt(query, search_results):
+    """
+    Build system prompt
+    """
     context = ""
 
     for doc in search_results:
         context = context + ENTRY_TEMPLATE.format(**doc) + "\n\n"
 
-    return PROMPT_INSTRUCTION.format(question=query, context=context).strip()
+    return PROMPT_INSTRUCTION.format(
+        question=query, context=context, DATA_IMAGES_PATH=DATA_IMAGES_PATH
+    ).strip()
 
 
-def llm(prompt, model_choice):
+def llm(messages, model_choice):
     start_time = time.time()
     if model_choice.startswith('ollama/'):
+        ollama_client = openai.OpenAI(base_url=OLLAMA_URL, api_key="ollama")
         response = ollama_client.chat.completions.create(
             model=model_choice.split('/')[-1],
-            messages=[{"role": "user", "content": prompt}]
+            messages=messages,  # [{"role": "user", "content": prompt}]
         )
         answer = response.choices[0].message.content
         tokens = {
             'prompt_tokens': response.usage.prompt_tokens,
             'completion_tokens': response.usage.completion_tokens,
-            'total_tokens': response.usage.total_tokens
+            'total_tokens': response.usage.total_tokens,
         }
     elif model_choice.startswith('Groq/'):
+        groq_client = groq.Groq(api_key=GROQ_API_KEY)
         response = groq_client.chat.completions.create(
-        model=model_choice.split('/')[-1],
-        messages=[{"role": "user", "content": prompt}]
-    )
-        answer = response.choices[0].message.content
-        tokens = {
-            'prompt_tokens': response.usage.prompt_tokens,
-            'completion_tokens': response.usage.completion_tokens,
-            'total_tokens': response.usage.total_tokens
-    }
-    elif model_choice.startswith('openai/'):
-        response = openai_client.chat.completions.create(
             model=model_choice.split('/')[-1],
-            messages=[{"role": "user", "content": prompt}]
+            messages=messages,  # [{"role": "user", "content": prompt}]
         )
         answer = response.choices[0].message.content
         tokens = {
             'prompt_tokens': response.usage.prompt_tokens,
             'completion_tokens': response.usage.completion_tokens,
-            'total_tokens': response.usage.total_tokens
+            'total_tokens': response.usage.total_tokens,
+        }
+    elif model_choice.startswith('openai/'):
+        openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        response = openai_client.chat.completions.create(
+            model=model_choice.split('/')[-1],
+            messages=messages,  # [{"role": "user", "content": prompt}]
+        )
+        answer = response.choices[0].message.content
+        tokens = {
+            'prompt_tokens': response.usage.prompt_tokens,
+            'completion_tokens': response.usage.completion_tokens,
+            'total_tokens': response.usage.total_tokens,
         }
     else:
         raise ValueError(f"Unknown model choice: {model_choice}")
@@ -210,7 +218,8 @@ def evaluate_relevance(question, answer):
     """.strip()
 
     prompt = prompt_template.format(question=question, answer=answer)
-    evaluation, tokens, _ = llm(prompt, EVALUATION_MODEL)
+
+    evaluation, tokens, _ = llm([{"role": "user", "content": prompt}], EVALUATION_MODEL)
 
     try:
         json_eval = json.loads(evaluation)
@@ -227,26 +236,43 @@ def calculate_openai_cost(model_choice: str, tokens: Dict[str, float]) -> float:
     openai_cost = 0
 
     if model_choice == 'openai/gpt-3.5-turbo':
-        openai_cost = (tokens['prompt_tokens'] * 0.0015
-                       + tokens['completion_tokens'] * 0.002) / 1000
+        openai_cost = (
+            tokens['prompt_tokens'] * 0.0015 + tokens['completion_tokens'] * 0.002
+        ) / 1000
     elif model_choice == 'openai/gpt-4o':
-        openai_cost = (tokens['prompt_tokens'] * 0.005
-                       + tokens['completion_tokens'] * 0.015) / 1000
+        openai_cost = (
+            tokens['prompt_tokens'] * 0.005 + tokens['completion_tokens'] * 0.015
+        ) / 1000
     elif model_choice == 'openai/gpt-4o-mini':
-        openai_cost = (tokens['prompt_tokens'] * 0.00015
-                       + tokens['completion_tokens'] * 0.0006) / 1000
+        openai_cost = (
+            tokens['prompt_tokens'] * 0.00015 + tokens['completion_tokens'] * 0.0006
+        ) / 1000
     return openai_cost
 
 
-def get_answer(query, course, model_choice, search_type):
-    if search_type == 'Vector':
-        vector = model.encode(query)
-        search_results = elastic_search_knn('question_text_vector', vector, course)
-    else:
-        search_results = elastic_search_text(query, course)
-
+def get_answer(query: str, model_choice: str, conv_history: list[Dict[str, str]]):
+    """
+    Get RAG answer from query given a llm model
+    """
+    # if search_type == 'Vector':
+    #     vector = model.encode(query)
+    #     search_results = elastic_search_knn('question_text_vector', vector, course)
+    # else:
+    #     search_results = elastic_search_text(query, course)
+    search_results = minsearch_hybrid_rrk_improved(query)
     prompt = build_prompt(query, search_results)
-    answer, tokens, response_time = llm(prompt, model_choice)
+
+    # System prompt + context data
+    messages: list[dict[str, str]] = [{"role": "system", "content": prompt}]
+
+    # Add the conversation history so that the llm can keep track of conversations
+    messages.extend(
+        [{"role": msg["role"], "content": msg["content"]} for msg in conv_history]
+    )
+
+    answer, tokens, response_time = llm(messages, model_choice)
+
+    # answer = replace_image_syntax(answer)
 
     relevance, explanation, eval_tokens = evaluate_relevance(query, answer)
 
@@ -264,5 +290,5 @@ def get_answer(query, course, model_choice, search_type):
         'eval_prompt_tokens': eval_tokens['prompt_tokens'],
         'eval_completion_tokens': eval_tokens['completion_tokens'],
         'eval_total_tokens': eval_tokens['total_tokens'],
-        'openai_cost': openai_cost
+        'openai_cost': openai_cost,
     }
