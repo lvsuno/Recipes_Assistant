@@ -13,7 +13,7 @@
 [![Pre-commit](https://img.shields.io/badge/pre_commit-2.20.0-f8b425)](https://pre-commit.com/)
 [![Pylint](https://img.shields.io/badge/pylint-2.15.4-2a5adf)](https://pylint.pycqa.org/en/latest/)
 
-<br><br><br>
+<br>
 
 This is repository contain the code to build a digital recipe assistant.
 
@@ -36,8 +36,6 @@ The dataset used here contains:
 Recipe data that can be downloaded on [kaggle](https://www.kaggle.com/datasets/pes12017000148/food-ingredients-and-recipe-dataset-with-images?resource=download). The dataset contains
 than 13 501 recipes from [epicurious.com](https://www.epicurious.com/).
 
-
-## Additional notes for those trying the streamlit/grafana out
 
 ## Technologies
 | Name | Scope |
@@ -71,7 +69,7 @@ The user has choice between the following models:
 - `openai/gpt-4o-mini`
 ## Project setup
 
-1. You need a key from OpenAi or Groq depending on the model you choose. If your key is not valid, the chat will not start. You have to place the key in the `.env` file. This file, i defined it as `dev.env` you have to change the name and write your own credentials.
+1. You need a key from OpenAi or Groq depending on the model you choose. If your key is not valid, the chat will not start. You have to place the key in the `.env` file. This file, i defined it as `dev.env` you have to change the name and write your own credentials. Also change the variable `TZ_ZONE` in  `.env` file to change your time zone (mostly for grafana).
 
 2. You can start the project by running `make init-docker` in the terminal or by typing `docker-compose up`.
 
@@ -99,7 +97,85 @@ We have the following notebooks:
 
 - [`clean_data.ipynb`](notebooks/clean_data.ipynb): To clean the data and save it to [`clean_data.csv`](data/clean_data.csv)
 - [`rag-test.ipynb`](notebooks/rag-test.ipynb): The RAG flow and evaluating the system.
-- [`evaluation-data-generation.ipynb`](notebooks/evaluation-data-generation.ipynb): Generating the ground truth dataset for retrieval evaluation.
+- [`evaluation-data-generation.ipynb`](notebooks/evaluation-data-generation.ipynb): Generating the ground truth dataset for retrieval evaluation. The ground truth is composed of 67 505 questions.
+
+## Code
+
+The for the application can be found in [recipe_assistant](recipe_assistant/) folder:
+
+- [`app.py`](recipe_assistant/app.py) - the entrypoint to the application containing the logic of the user interface
+- [`assistant.py`](recipe_assistant/rag.py) - the main RAG logic for building the retrieving the data
+- [`app_utils/ui.py`](recipe_assistant/app_utils/ui.py) - the definition of some ui widgets
+- [`app_utils/utils.py`](recipe_assistant/app_utils/utils.py) - some utility function
+- [`app_utils/cst.py`](recipe_assistant/app_utils/utils.py) - define some constant values
+- [`prompt_builder.py`](recipe_assistant/prompt_builder.py) -  building the prompt and defining the welcome message
+- [`minsearch.py`](recipe_assistant/minsearch.py) - an in-memory search engine
+- [`db.py`](recipe_assistant/db.py) - the logic for interacting with postgres
+- [`prep.py`](recipe_assistant/prep.py) - the script for initializing the database, index the documents.
+
+
+### Interface
+We use streamlit to build a nice user interface. Refer to the ["Running the application" section](#running-the-application)
+
+### Ingestion
+With the script [`prep.py`](recipe_assistant/prep.py), we index the documents and save it to [app_utils/](recipe_assistant/app_utils/) as pickle file. We have to run this file just after launching docker compose. Once the file is saved, we don't need the data anymore. This file is loaded after by [`assistant.py`](recipe_assistant/rag.py).
+
+
+### Retrieval evaluation
+
+* minsearch text
+    + hit_rate: 62.07%
+    + mrr: 49.16%
+
+* minsearch vector
+    + hit_rate: 62.41%
+    + mrr: 49.15%
+
+* minsearch hybrid
+    + hit_rate: 67.22%
+    + mrr: 53.20%
+
+
+* elastic search text
+    + hit_rate: 53.64%
+    + mrr: 43.08%
+
+* elastic search vector
+    + hit_rate: 56.78%
+    + mrr: 47.74%
+
+The best boosting parameters with minsearch hybrid:
+
+```python
+boost = {'Title': 1.301766512843531,
+         'Instructions': 0.7387164179150028,
+         'text': 0.36555723393033346
+        }
+```
+the `text` field is the weight for `text search` and `1-text` is the weight for `vector search`.
+
+* minsearch hybrid improved with boosting
+    + hit_rate: 68.48%
+    + mrr: 56.94%
+
+* reranking with `cross-encoder/ms-marco-MiniLM-L-6-v2` as model with boosted hybrid minsearch.
+
+    + hit_rate: 57.69%
+    + mrr: 54.37%
+
+The retrieval score is low because some questions generated is difficult to agnostically link them to a recipe.
+
+Exemple: `How long does the chicken need to rest after roasting before serving?`
+
+### RAG Evaluation
+
+We sample 2000 data to evaluate our RAG flow.
+
+We just run it for `gpt-4o-mini` due to the time and cost
+
+- RELEVANT        1872 (93.6%)
+- PARTLY_RELEVANT  116 (5.8%)
+- NON_RELEVANT      12 (0.6%)
 
 
 ## Monitoring
@@ -116,3 +192,54 @@ It's accessible at [localhost:3000](http://localhost:3000):
 <p align="center">
   <img src="Doc_images/Dashboard.png">
 </p>
+
+The monitoring dashboard contains several panels:
+
+1. **Response Time (Time Series):** A time series chart showing the response time of conversations over time.
+
+2. **Relevancy (Donut):** A Donut chart representing the relevance of the responses provided during conversations.
+
+3. **Model Used (Bar Chart):** A bar chart displaying the count of conversations based on the different models used within the selected time range.
+
+4. **Global Tokens (Time Series):** Time series chart that tracks the number of tokens used in conversations over time.
+
+5. **Tokens used per model (Bar Chart):** A bar chart displaying the number of tokens used per model within the selected time range.
+
+6. **OpenAI Cost (Time Series):** A time series chart showing the cost associated with OpenAI usage over time.
+
+7. **Last 5 Conversations (Table):** Displays a table showing the five most recent conversations, including details such as the question, answer, relevance, and timestamp.
+
+8. **Very Bad to Excellent (Donut Chart):** A pie chart that visualizes the feedback from users, showing the degree of user satisfaction.
+
+
+### Setting up Grafana
+
+All Grafana configurations are in the [`grafana`](grafana/) folder:
+
+- [`init.py`](grafana/init.py) - for initializing the datasource and the dashboard.
+- [`dashboard.json`](grafana/dashboard.json) - that contain our dashboard.
+
+To avoid issue due, you have to export the following environment variables:
+
+```bash
+export POSTGRES_HOST="localhost"
+export GRAFANA_ADMIN_USER=admin
+export GRAFANA_ADMIN_PASSWORD=admin
+export POSTGRES_DB= your_postgres_DB_as_define_in_.env
+export POSTGRES_USER= your_postgres_user_as_define_in_.env
+export POSTGRES_PASSWORD= your_postgres_password_as_define_in_.env
+export POSTGRES_PORT=5432
+```
+
+then run (make sure you have install python and the package `requests`)
+
+```bash
+python grafana/init.py
+```
+
+Then go to [localhost:3000](http://localhost:3000):
+
+- Login: "admin"
+- Password: "admin"
+
+When prompted, keep "admin" as the new password.
