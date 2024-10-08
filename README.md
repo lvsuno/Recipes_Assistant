@@ -87,7 +87,7 @@ You just need to go to [http://localhost:8501/](http://localhost:8501/) since do
 1. You need to choose a pseudo first. Each user can have several sessions (each run of streamlit), each session can have several chats and each chat several conversation.
 2. Select a model to start a chat. Make sure that your LLM API key is valid if not the chat will not be displayed.
 3. After a certain number of conversation, you can click on the button `new chat` to initialise a new chat.
-
+4. If you have check show history, the latest 5 chats will be listed in the sidebar and you can click on any one and continue your conversation.
 
 ![](Doc_images/app.gif)
 

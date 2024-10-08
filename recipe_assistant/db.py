@@ -288,20 +288,17 @@ def get_recent_chats(pseudo, limit=5):
                 FROM Users u
                 LEFT JOIN Sessions s ON u.id = s.user_id
                 WHERE u.pseudo='{pseudo}'
-                )
-
-                WITH user_chats AS (
+                ),
+                user_chats AS (
                 SELECT c.id
                 FROM Chats c
-                WHERE c.session_id IN user_sessions
-                )
-
-                WITH subq AS (
+                WHERE c.session_id IN (SELECT id FROM user_sessions)
+                ),
+                subq AS (
                 SELECT chat_id, question, timestamp,
                 rank() OVER (PARTITION BY chat_id ORDER BY timestamp ASC) AS rk
-                FROM Conversations WHERE chat_id IN user_chats
+                FROM Conversations WHERE chat_id IN (SELECT id FROM user_chats)
                 )
-
                 SELECT c.question, c.chat_id, h.chat_time
                 FROM subq c
                 LEFT JOIN Chats h ON h.id = c.chat_id
@@ -323,11 +320,10 @@ def get_a_chat(chat_id: str):
     try:
         with conn.cursor(cursor_factory=DictCursor) as cur:
             query = f"""
-                SELECT c.*, f.feedback
-                FROM Conversations c
-                LEFT JOIN Feedbacks f ON c.id = f.conversation_id
-                WHERE c.chat_id = '{chat_id}'
-                ORDER BY c.timestamp ASC
+                SELECT question, answer
+                FROM Conversations
+                WHERE chat_id = '{chat_id}'
+                ORDER BY timestamp ASC
             """
 
             cur.execute(query)

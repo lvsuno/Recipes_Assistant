@@ -9,14 +9,13 @@ import pandas as pd
 import streamlit as st
 from db import (
     check_user,
-    get_a_chat,
     create_chat,
     create_user,
     save_feedback,
     create_session,
     get_recent_chats,
     save_conversation,
-    get_feedback_stats
+    get_feedback_stats,
 )
 from assistant import get_answer
 from app_utils.ui import (
@@ -25,7 +24,7 @@ from app_utils.ui import (
     create_chat_msg,
     disclaimer_dialog,
     create_welcome_msg,
-    show_current_chat_history
+    show_current_chat_history,
 )
 from prompt_builder import WELCOME_MSG
 from app_utils.utils import BOT_AVATAR_FILE, USER_AVATAR_FILE, session_keys
@@ -60,13 +59,10 @@ def init_project():
     # st.write("Before starting the app please login first")
 
     if 'first_run' not in st.session_state:
-        session_keys('first_run', True)
-        # st.session_state.first_run = True
-
+        st.session_state.first_run = True
         disclaimer_dialog()
     else:
-        session_keys('first_run', False)
-        # st.session_state.first_run = False
+        st.session_state.first_run = False
 
     # Session state initialization
     if 'session_id' not in st.session_state:
@@ -80,20 +76,12 @@ def init_project():
     else:
         st.session_state["user_login_state"] = True
 
-    if 'user_name' not in st.session_state:
-        st.session_state["user_name"] = None
-
-    if 'key_val' not in st.session_state:
-        st.session_state["key_val"] = None
-
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    if 'fbk' not in st.session_state:
-        session_keys('fbk', False)
-
-    if 'new_llm_answer' not in st.session_state:
-        session_keys('new_llm_answer', False)
+    session_keys('user_name', None)
+    session_keys('key_val', None)
+    session_keys('messages', [])
+    session_keys('fbk_sel', False)
+    session_keys('new_llm_answer', False)
+    session_keys("conv_save_status", 0)
     # df = pd.read_csv('data/time_zone.csv')
 
     # tz_zone = pd.Series(df['timezone']).unique().tolist()
@@ -104,6 +92,12 @@ def init_project():
     #     # txt = f"You chose {chosen_tz_zone}"
     #     # st.write(f":green[{txt}]")
     #     os.environ['TZ_ZONE'] = chosen_tz_zone
+
+
+def feedback_callback():
+    st.session_state.fbk_sel = True
+    if st.session_state.fbk is not None:
+        save_feedback(st.session_state.conv_id, st.session_state.fbk)
 
 
 def main():
@@ -159,10 +153,11 @@ def main():
                     st.session_state.chat_id = 'ch_' + str(uuid.uuid4())
                     create_chat(st.session_state.chat_id, st.session_state.session_id)
                     st.session_state.new_llm_answer = False
-                    st.session_state.fbk = False
+                    st.session_state.fbk_sel = False
 
             show_history_on = st.toggle("Show History")
             # if show_history_on:
+            #     recent_chats = get_recent_chats(st.session_state["user_name"])
             #     st.session_state.new_llm_answer = False
             #     st.session_state.fbk = False
 
@@ -192,7 +187,9 @@ def main():
 
         if prompt := st.chat_input("How to cook rice?"):
             st.session_state.new_llm_answer = False
-            st.session_state.fbk = False
+            st.session_state.fbk_sel = False
+            st.session_state.conv_save_status = 0
+
             create_chat_msg(
                 content=stream_text(prompt, sleep=0.001),
                 role="user",
@@ -215,17 +212,22 @@ def main():
             st.session_state.messages.append(
                 {"role": "assistant", "content": raw_answer["answer"]}
             )
-
+    elif not st.session_state["key_val"] and model_choice != " ":
+        st.error('Your API Key is invalid', icon="🚨")
     if st.session_state.new_llm_answer:
         st.markdown("### Rate this answer:")
-        fbk_sel = st.feedback(
+        st.feedback(
             "stars",
             key='fbk',
-            on_change=session_keys("fbk", True),
-            disabled=st.session_state["fbk"],
+            on_change=feedback_callback,
+            disabled=st.session_state["fbk_sel"],
         )
-        if isinstance(fbk_sel, int) and fbk_sel:
-            save_feedback(st.session_state.conv_id, fbk_sel)
+        # if isinstance(fbk_sel, int) and fbk_sel:
+        #     print_log(st.session_state.conv_save_status)
+        #     if st.session_state["conv_save_status"] == 0:
+        #         st.session_state["conv_save_status"] = 1
+        #         save_feedback(st.session_state.conv_id, fbk_sel)
+
     print_log("Streamlit app loop completed")
 
 

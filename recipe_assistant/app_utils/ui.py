@@ -1,16 +1,15 @@
 from typing import Any
 from collections.abc import Iterable
 
-import groq
-import openai
 import streamlit as st
 
-from .cst import GROQ_API_KEY, OPENAI_API_KEY
+from ..db import get_a_chat
 from .utils import (
     BOT_AVATAR_FILE,
     BOT_DISCLAIMER_FILE,
     stream_text,
-    session_keys
+    session_keys,
+    check_llm_api_key,
 )
 
 
@@ -25,20 +24,6 @@ def show_md_file(path, **kwargs):
         st.markdown(content.format(**kwargs))
     else:
         st.markdown(content)
-
-
-def create_button(state_key: str, label: str, default: bool = False, **kwargs) -> bool:
-    """
-    Function to create a button
-    """
-    session_keys(state_key, default)
-
-    def click_button():
-        st.session_state[state_key] = True
-
-    st.button(label=label, key=f"ui_{state_key}", on_click=click_button, **kwargs)
-
-    return st.session_state[state_key]
 
 
 def menu_ui(app_desc_text: str):
@@ -95,6 +80,7 @@ def menu_ui(app_desc_text: str):
                     "Enter your pseudo",
                     "jensen",
                     key="login_pseudo",
+                    disabled=st.session_state["user_login_state"],
                 )
                 # st.text_input(
                 #     "Enter your email",
@@ -124,32 +110,6 @@ def disclaimer_dialog():
     Use this dialog at the begining
     """
     show_md_file(BOT_DISCLAIMER_FILE)
-
-
-def check_llm_api_key() -> None:
-    """
-    Check validity of the api key
-    """
-    model_choice = st.session_state.model_choice_box
-    if model_choice.startswith('openai/'):
-        client = openai.OpenAI(api_key=OPENAI_API_KEY)
-        try:
-            client.models.list()
-        except openai.AuthenticationError:
-            st.session_state["key_val"] = False
-
-        else:
-            st.session_state["key_val"] = True
-    elif model_choice.startswith('Groq/'):
-        client = groq.Groq(api_key=GROQ_API_KEY)
-        try:
-            client.models.list()
-        except groq.AuthenticationError:
-            st.session_state["key_val"] = False
-        else:
-            st.session_state["key_val"] = True
-    else:
-        st.session_state["key_val"] = True
 
 
 def create_chat_msg(
@@ -188,4 +148,43 @@ def show_current_chat_history(avatars: dict[str, Any], state_key: str = "message
             st.markdown(msg_dict["content"])
 
 
-# def show_assistant_response(Iterable[str])
+def create_hystory_button(
+    state_key: str, label: str, args, default: bool = False, **kwargs
+) -> bool:
+    """
+    Function to create a button
+    """
+    session_keys(state_key, default)
+
+    st.button(
+        label=label, key=f"ui_{state_key}", on_click=show_a_chat, args=args, **kwargs
+    )
+
+    return st.session_state[state_key]
+
+
+def build_chat_history_ui(records, avatars):
+
+    for record in records:
+        label = (record[0][:50] + '..') if len(record[0]) > 75 else record[0]
+        create_button(
+            "state_key: str",
+            label=label,
+            default=False,
+            args=(record[1], avatars),
+            use_container_width=True,
+        )
+
+        st.write("---")
+
+
+def show_a_chat(chat_id: str, avatars):
+    records = get_a_chat(chat_id)
+    st.session_state["messages"].clear()
+    for record in records:
+        st.session_state["messages"].append({"role": "user", "content": record[0]})
+        with st.chat_message(name="user", avatar=avatars["user"]):
+            st.markdown(record[0])
+        st.session_state["messages"].append({"role": "assistant", "content": record[1]})
+        with st.chat_message(name="assistant", avatar=avatars["assistant"]):
+            st.markdown(record[1])

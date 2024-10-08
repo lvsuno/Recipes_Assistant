@@ -10,7 +10,11 @@ from typing import Iterable
 from pathlib import Path
 from email.mime.text import MIMEText
 
+import groq
+import openai
 import streamlit as st
+
+from .cst import GROQ_API_KEY, OPENAI_API_KEY
 
 ROOT_PATH: Path = Path(".").resolve()
 WRK_PATH: Path = ROOT_PATH / "recipe_assistant"
@@ -36,24 +40,6 @@ BOT_DISCLAIMER_FILE: Path = WRK_PATH / "assets/disclaimer.md"
 
 # def load_bootstrap():
 #     return st.markdown('<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">', unsafe_allow_html=True)
-
-
-def get_env_bool_variable(name: str, default_value: bool | None = None) -> bool:
-    """
-    Get boolean envionment variables
-    """
-
-    true_ = ('true', '1', 't', 'y', 'yes', 'on')
-    false_ = ('false', '0', 'f', 'n', 'no', 'off')
-    value: str | None = os.getenv(name, None)
-    if value is None:
-        if default_value is None:
-            raise ValueError(f'Variable `{name}` not set!')
-        else:
-            value = str(default_value)
-    if value.lower() not in true_ + false_:
-        raise ValueError(f'Invalid value `{value}` for variable `{name}`')
-    return value in true_
 
 
 def stream_text(response: str, sleep: float = 0.05) -> Iterable[str]:
@@ -181,29 +167,30 @@ def is_valid_email(email):
     return re.match(pattern, email, re.VERBOSE) is not None
 
 
-def check_llm_api_key(model_choice: str) -> bool:
+def check_llm_api_key() -> None:
     """
     Check validity of the api key
     """
+    model_choice = st.session_state.model_choice_box
     if model_choice.startswith('openai/'):
         client = openai.OpenAI(api_key=OPENAI_API_KEY)
         try:
             client.models.list()
         except openai.AuthenticationError:
-            st.session_state["key_val"] = check_validity
-            return False
+            st.session_state["key_val"] = False
+
         else:
-            return True
+            st.session_state["key_val"] = True
     elif model_choice.startswith('Groq/'):
         client = groq.Groq(api_key=GROQ_API_KEY)
         try:
             client.models.list()
         except groq.AuthenticationError:
-            return False
+            st.session_state["key_val"] = False
         else:
-            return True
+            st.session_state["key_val"] = True
     else:
-        return True
+        st.session_state["key_val"] = True
 
 
 # load_bootstrap()
