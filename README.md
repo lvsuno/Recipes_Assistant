@@ -84,7 +84,11 @@ The pipenv environment is just use for development to make some code quality che
 
 You just need to go to [http://localhost:8501/](http://localhost:8501/) since docker compose have make everything up.
 
-You need to choose a pseudo first. Each user can have several sessions (each run of streamlit), each session can have several chats and each chat several conversation.
+1. You need to choose a pseudo first. Each user can have several sessions (each run of streamlit), each session can have several chats and each chat several conversation.
+2. Select a model to start a chat. Make sure that your LLM API key is valid if not the chat will not be displayed.
+3. After a certain number of conversation, you can click on the button `new chat` to initialise a new chat.
+
+
 ![](Doc_images/app.gif)
 
 
