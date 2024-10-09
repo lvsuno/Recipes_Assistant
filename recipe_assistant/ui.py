@@ -3,8 +3,8 @@ from collections.abc import Iterable
 
 import streamlit as st
 
-from ..db import get_a_chat
-from .utils import (
+from db import get_a_chat
+from app_utils.utils import (
     BOT_AVATAR_FILE,
     BOT_DISCLAIMER_FILE,
     stream_text,
@@ -148,37 +148,35 @@ def show_current_chat_history(avatars: dict[str, Any], state_key: str = "message
             st.markdown(msg_dict["content"])
 
 
-def create_hystory_button(
-    state_key: str, label: str, args, default: bool = False, **kwargs
-) -> bool:
+def create_hystory_button(state_key: str, label: str, args, **kwargs) -> bool:
     """
     Function to create a button
     """
-    session_keys(state_key, default)
 
     st.button(
         label=label, key=f"ui_{state_key}", on_click=show_a_chat, args=args, **kwargs
     )
 
-    return st.session_state[state_key]
+    # return st.session_state[state_key]
 
 
 def build_chat_history_ui(records, avatars):
-
+    i = 0
     for record in records:
-        label = (record[0][:50] + '..') if len(record[0]) > 75 else record[0]
-        create_button(
-            "state_key: str",
+        label: str = (record[0][:30] + '..') if len(record[0]) > 30 else record[0]
+        i = i + 1
+        create_hystory_button(
+            f"h{i:02d}_button",
             label=label,
-            default=False,
-            args=(record[1], avatars),
+            args=(record[1], avatars, f"ui_h{i:02d}"),
+            help=record[0],
             use_container_width=True,
         )
 
         st.write("---")
 
 
-def show_a_chat(chat_id: str, avatars):
+def show_a_chat(chat_id: str, avatars, key):
     records = get_a_chat(chat_id)
     st.session_state["messages"].clear()
     for record in records:
@@ -188,3 +186,6 @@ def show_a_chat(chat_id: str, avatars):
         st.session_state["messages"].append({"role": "assistant", "content": record[1]})
         with st.chat_message(name="assistant", avatar=avatars["assistant"]):
             st.markdown(record[1])
+    st.session_state.fbk = record[2]
+    st.session_state[key] = True
+    st.session_state.fbk_sel = True

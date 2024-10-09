@@ -320,10 +320,11 @@ def get_a_chat(chat_id: str):
     try:
         with conn.cursor(cursor_factory=DictCursor) as cur:
             query = f"""
-                SELECT question, answer
-                FROM Conversations
-                WHERE chat_id = '{chat_id}'
-                ORDER BY timestamp ASC
+                SELECT c.question, c.answer, f.feedback
+                FROM Conversations c
+                LEFT JOIN Feedbacks f ON c.id = f.conversation_id
+                WHERE c.chat_id = '{chat_id}'
+                ORDER BY c.timestamp ASC
             """
 
             cur.execute(query)

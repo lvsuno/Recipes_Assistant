@@ -18,13 +18,14 @@ from db import (
     get_feedback_stats,
 )
 from assistant import get_answer
-from app_utils.ui import (
+from ui import (
     menu_ui,
     stream_text,
     create_chat_msg,
     disclaimer_dialog,
     create_welcome_msg,
     show_current_chat_history,
+    build_chat_history_ui,
 )
 from prompt_builder import WELCOME_MSG
 from app_utils.utils import BOT_AVATAR_FILE, USER_AVATAR_FILE, session_keys
@@ -81,7 +82,12 @@ def init_project():
     session_keys('messages', [])
     session_keys('fbk_sel', False)
     session_keys('new_llm_answer', False)
-    session_keys("conv_save_status", 0)
+    session_keys("h_tog", False)
+    session_keys("ui_h01", False)
+    session_keys("ui_h02", False)
+    session_keys("ui_h03", False)
+    session_keys("ui_h04", False)
+    session_keys("ui_h05", False)
     # df = pd.read_csv('data/time_zone.csv')
 
     # tz_zone = pd.Series(df['timezone']).unique().tolist()
@@ -154,10 +160,17 @@ def main():
                     create_chat(st.session_state.chat_id, st.session_state.session_id)
                     st.session_state.new_llm_answer = False
                     st.session_state.fbk_sel = False
+                    st.session_state["ui_h01"] = False
+                    st.session_state["ui_h02"] = False
+                    st.session_state["ui_h03"] = False
+                    st.session_state["ui_h04"] = False
+                    st.session_state["ui_h05"] = False
 
-            show_history_on = st.toggle("Show History")
-            # if show_history_on:
-            #     recent_chats = get_recent_chats(st.session_state["user_name"])
+            show_history_on = st.toggle("Show History", key='h_tog')
+            if show_history_on:
+                recent_chats = get_recent_chats(st.session_state["user_name"])
+                build_chat_history_ui(recent_chats, AVATARS)
+
             #     st.session_state.new_llm_answer = False
             #     st.session_state.fbk = False
 
@@ -214,7 +227,14 @@ def main():
             )
     elif not st.session_state["key_val"] and model_choice != " ":
         st.error('Your API Key is invalid', icon="🚨")
-    if st.session_state.new_llm_answer:
+    if (
+        st.session_state.new_llm_answer
+        or st.session_state.ui_h01
+        or st.session_state.ui_h02
+        or st.session_state.ui_h03
+        or st.session_state.ui_h04
+        or st.session_state.ui_h05
+    ):
         st.markdown("### Rate this answer:")
         st.feedback(
             "stars",
