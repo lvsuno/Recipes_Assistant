@@ -179,13 +179,14 @@ def build_chat_history_ui(records, avatars):
 def show_a_chat(chat_id: str, avatars, key):
     records = get_a_chat(chat_id)
     st.session_state["messages"].clear()
+    record = ['', '', '']
     for record in records:
         st.session_state["messages"].append({"role": "user", "content": record[0]})
-        with st.chat_message(name="user", avatar=avatars["user"]):
-            st.markdown(record[0])
+        # with st.chat_message(name="user", avatar=avatars["user"]):
+        #     st.markdown(record[0])
         st.session_state["messages"].append({"role": "assistant", "content": record[1]})
-        with st.chat_message(name="assistant", avatar=avatars["assistant"]):
-            st.markdown(record[1])
+        # with st.chat_message(name="assistant", avatar=avatars["assistant"]):
+        #     st.markdown(record[1])
     st.session_state.fbk = record[2]
     st.session_state[key] = True
     st.session_state.fbk_sel = True

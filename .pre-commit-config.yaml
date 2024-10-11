@@ -20,14 +20,14 @@ repos:
 
 - repo: local
   hooks:
-    # - id: pylint
-    #   name: pylint
-    #   entry: pylint
-    #   language: system
-    #   types: [python]
-    #   args: ["-rn", #  only display messages
-    #    "-sn", #  Don't display the score
-    #    "--recursive=y"]
+    - id: pylint
+      name: pylint
+      entry: pylint
+      language: system
+      types: [python]
+      args: ["-rn", #  only display messages
+       "-sn", #  Don't display the score
+       "--recursive=y"]
 
     - id: black
       name: black
